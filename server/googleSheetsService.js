@@ -1,7 +1,12 @@
 import { google } from "googleapis";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: join(__dirname, "..", ".env") });
+dotenv.config({ path: join(__dirname, ".env") });
 
 // In-memory cache with TTL (5 minutes for filter options, 30 seconds for submissions)
 const cache = new Map();
@@ -107,10 +112,14 @@ if (keyEnv && !keyEnv.startsWith("./") && !keyEnv.startsWith("/")) {
   });
 } else {
   // Use file (for local development)
-  const keyFile =
+  const rawKeyFile =
     keyEnv && (keyEnv.startsWith("./") || keyEnv.startsWith("/"))
       ? keyEnv
       : "./react-deal-sourcer-45126b11537a.json";
+  // Resolve relative to the project root (one level up from server/)
+  const keyFile = rawKeyFile.startsWith("/")
+    ? rawKeyFile
+    : join(__dirname, "..", rawKeyFile.replace(/^\.?\//, ""));
   auth = new google.auth.GoogleAuth({
     keyFile: keyFile,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],

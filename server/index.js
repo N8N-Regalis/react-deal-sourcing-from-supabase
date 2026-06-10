@@ -5,10 +5,11 @@ import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 
 // Load environment variables first
+// Loads root .env then server/.env (server/.env takes precedence); on Railway, env vars are injected automatically
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
-const envPath = join(__dirname, '..', '.env')
-dotenv.config({ path: envPath })
+dotenv.config({ path: join(__dirname, '..', '.env') })
+dotenv.config({ path: join(__dirname, '.env') })
 
 // Now import services that depend on environment variables
 import { getPartners } from './googleSheetsService.js'

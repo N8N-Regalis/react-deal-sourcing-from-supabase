@@ -483,14 +483,14 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
             </tr>
           </thead>
           <tbody>
-            {getSortedSubmissions.length === 0 ? (
+            {getFilteredAndSortedSubmissions.length === 0 ? (
               <tr>
                 <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
                   No submissions yet
                 </td>
               </tr>
             ) : (
-              getSortedSubmissions.map((submission) => (
+              getFilteredAndSortedSubmissions.map((submission) => (
                 <React.Fragment key={submission.submissionId}>
                   <tr 
                     className={`clickable-row ${isDueToday(submission.dueDate) && submission.status !== 'Axed' && submission.status !== 'Added in Bitrix' ? 'due-today' : ''}`}

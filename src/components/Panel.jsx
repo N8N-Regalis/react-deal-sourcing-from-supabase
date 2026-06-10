@@ -6,7 +6,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   const [editingRow, setEditingRow] = useState(null)
   const [editFormData, setEditFormData] = useState({})
   const [sortBy, setSortBy] = useState('entryDate')
-  const [sortOrder, setSortOrder] = useState('asc')
+  const [sortOrder, setSortOrder] = useState('desc')
   const [filters, setFilters] = useState({
     entryDate: [],
     partner: [],
@@ -121,11 +121,19 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   const parseDate = (dateStr) => {
     if (!dateStr) return new Date(0);
     try {
-      // Handle Google Sheets timestamp format (YYYY-MM-DD HH:MM:SS)
+      // Handle both Google Sheets (YYYY-MM-DD HH:MM:SS) and Supabase ISO (YYYY-MM-DDTHH:MM:SSZ) formats
       const trimmedStr = dateStr.trim();
+      
+      // For ISO timestamps, parse directly - Date constructor handles them well
+      if (trimmedStr.includes('T')) {
+        return new Date(trimmedStr);
+      }
+      
+      // For Google Sheets format, extract date part and parse
       const dateOnly = trimmedStr.split(' ')[0];
       return new Date(dateOnly);
     } catch (error) {
+      console.error('Error parsing date:', dateStr, error);
       return new Date(0);
     }
   }
@@ -492,10 +500,10 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                       {submission.timestamp ? 
                         (() => {
                           try {
-                            // Handle Google Sheets timestamp format (YYYY-MM-DD HH:MM:SS)
+                            // Handle both Google Sheets (YYYY-MM-DD HH:MM:SS) and Supabase ISO (YYYY-MM-DDTHH:MM:SSZ) formats
                             const dateStr = submission.timestamp.trim();
-                            // Extract just the date part if it's in YYYY-MM-DD HH:MM:SS format
-                            const dateOnly = dateStr.split(' ')[0];
+                            // Extract just the date part - split on space for Google Sheets or 'T' for ISO format
+                            const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.split(' ')[0];
                             return dateOnly;
                           } catch (error) {
                             console.error('Error parsing timestamp:', submission.timestamp, error);

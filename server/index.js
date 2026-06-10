@@ -1,9 +1,18 @@
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { getPartners, getUserEmail, saveData, getUserSubmissions, updateSubmission, checkDuplicateSubmission, getAllSubmissions, normalizeUrl, getFilterOptions } from './googleSheetsService.js'
+import { fileURLToPath } from 'url'
+import { dirname, join } from 'path'
 
-dotenv.config()
+// Load environment variables first
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const envPath = join(__dirname, '..', '.env')
+dotenv.config({ path: envPath })
+
+// Now import services that depend on environment variables
+import { getPartners } from './googleSheetsService.js'
+import { getUserEmail, saveData, getUserSubmissions, updateSubmission, checkDuplicateSubmission, getAllSubmissions, normalizeUrl, getFilterOptions } from './supabaseService.js'
 
 const app = express()
 const PORT = process.env.PORT || 5000

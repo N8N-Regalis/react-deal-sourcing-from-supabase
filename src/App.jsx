@@ -23,7 +23,8 @@ function App() {
     partner: [],
     listingName: [],
     sourceType: [],
-    status: []
+    status: [],
+    listingLink: []
   });
 
   useEffect(() => {
@@ -175,6 +176,7 @@ function App() {
                 onPageChange={handlePageChange}
                 filterOptions={filterOptions}
                 onFilterChange={(filters) => loadSubmissions(1, filters, pagination.limit)}
+                userEmail={userEmail}
               />
             )}
           </>

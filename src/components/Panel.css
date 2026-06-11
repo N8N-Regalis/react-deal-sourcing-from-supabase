@@ -139,6 +139,7 @@
 .table-wrapper {
   flex: 1;
   overflow-y: auto;
+  overflow-x: auto;
   border-radius: 12px;
   position: relative;
   min-height: 0;
@@ -146,6 +147,7 @@
 
 table {
   width: 100%;
+  min-width: 800px;
   border-collapse: collapse;
   font-size: 12px;
 }
@@ -206,12 +208,10 @@ thead th {
 }
 
 .filter-dropdown-container {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 9999;
-  margin-top: 4px;
-  min-width: 200px;
+  position: fixed;
+  z-index: 10000;
+  min-width: 280px;
+  max-width: 400px;
 }
 
 .filter-dropdown {
@@ -221,8 +221,8 @@ thead th {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   max-height: 300px;
   overflow-y: auto;
-  min-width: 200px;
-  max-width: 300px;
+  min-width: 250px;
+  max-width: 350px;
   backdrop-filter: blur(8px);
 }
 
@@ -233,7 +233,6 @@ thead th {
   top: 0;
   background: rgba(17, 24, 39, 0.98);
   z-index: 10;
-  position: relative;
 }
 
 .search-indicator {
@@ -407,6 +406,7 @@ tbody td a:active {
 
   table {
     font-size: 11px;
+    min-width: 700px;
   }
 
   th, td {
@@ -460,6 +460,7 @@ tbody td a:active {
 
   table {
     font-size: 11px;
+    min-width: 600px;
   }
 
   th, td {
@@ -938,4 +939,36 @@ tbody td a:active {
   .pagination-total {
     display: none;
   }
+}
+
+/* Listing link styling to prevent height expansion */
+.listing-link {
+  max-width: 200px;
+}
+
+.listing-link a {
+  display: inline-block;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  color: #60a5fa;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  transition: color 0.2s ease;
+}
+
+.listing-link a:hover {
+  color: #93c5fd;
+  background: transparent;
+  transform: none;
+  border: none;
+}
+
+.listing-link a:active {
+  transform: none;
 }

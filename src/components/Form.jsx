@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Select from "react-select";
 import "./Form.css";
 
@@ -21,8 +21,140 @@ const Form = ({
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [favorites, setFavorites] = useState([]);
 
-  const partnerOptions = partners.map((p) => ({ value: p, label: p }));
+  // Favorites management functions
+  const getFavoritesKey = () => `userFavorites_${userEmail}`;
+  
+  const getStoredFavorites = () => {
+    try {
+      const stored = localStorage.getItem(getFavoritesKey());
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error reading favorites from localStorage:', error);
+      return [];
+    }
+  };
+  
+  const saveFavorites = (favoritesList) => {
+    try {
+      localStorage.setItem(getFavoritesKey(), JSON.stringify(favoritesList));
+    } catch (error) {
+      console.error('Error saving favorites to localStorage:', error);
+    }
+  };
+  
+  const toggleFavorite = (partnerName) => {
+    const currentFavorites = getStoredFavorites();
+    let newFavorites;
+    
+    if (currentFavorites.includes(partnerName)) {
+      newFavorites = currentFavorites.filter(fav => fav !== partnerName);
+    } else {
+      newFavorites = [...currentFavorites, partnerName];
+    }
+    
+    saveFavorites(newFavorites);
+    setFavorites(newFavorites);
+  };
+  
+  // Clean up favorites that no longer exist in partners list
+  const cleanupFavorites = (currentFavorites, currentPartners) => {
+    const validFavorites = currentFavorites.filter(fav => currentPartners.includes(fav));
+    if (validFavorites.length !== currentFavorites.length) {
+      saveFavorites(validFavorites);
+    }
+    return validFavorites;
+  };
+  
+  // Load and clean favorites when partners change
+  useEffect(() => {
+    if (partners.length > 0 && userEmail) {
+      const storedFavorites = getStoredFavorites();
+      const cleanedFavorites = cleanupFavorites(storedFavorites, partners);
+      setFavorites(cleanedFavorites);
+    }
+  }, [partners, userEmail]);
+  
+  // Create partner options with favorites first
+  const partnerOptions = useMemo(() => {
+    const favoriteOptions = favorites.map(fav => ({
+      value: fav,
+      label: (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span>{fav}</span>
+          <span 
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleFavorite(fav);
+            }}
+            style={{ 
+              cursor: 'pointer', 
+              color: '#fbbf24',
+              fontSize: '16px',
+              marginLeft: '8px'
+            }}
+            title="Remove from favorites"
+          >
+            ⭐
+          </span>
+        </div>
+      ),
+      isFavorite: true
+    }));
+    
+    const nonFavoriteOptions = partners
+      .filter(p => !favorites.includes(p))
+      .map(p => ({
+        value: p,
+        label: (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span>{p}</span>
+            <span 
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavorite(p);
+              }}
+              style={{ 
+                cursor: 'pointer', 
+                color: '#d1d5db',
+                fontSize: '16px',
+                marginLeft: '8px'
+              }}
+              title="Add to favorites"
+            >
+              ☆
+            </span>
+          </div>
+        ),
+        isFavorite: false
+      }));
+    
+    const options = [];
+    
+    if (favoriteOptions.length > 0) {
+      options.push({
+        value: 'favorites-separator',
+        label: 'FAVORITES',
+        isDisabled: true,
+        isSeparator: true
+      });
+      options.push(...favoriteOptions);
+    }
+    
+    if (nonFavoriteOptions.length > 0 && favoriteOptions.length > 0) {
+      options.push({
+        value: 'non-favorites-separator',
+        label: 'ALL PARTNERS',
+        isDisabled: true,
+        isSeparator: true
+      });
+    }
+    
+    options.push(...nonFavoriteOptions);
+    
+    return options;
+  }, [partners, favorites]);
 
   const handleSourceTypeChange = (e) => {
     setSourceType(e.target.value);
@@ -111,9 +243,11 @@ const Form = ({
         <Select
           value={partner}
           onChange={(selectedOption) => {
-            setPartner(selectedOption);
-            if (fieldErrors.partner) {
-              setFieldErrors(prev => ({ ...prev, partner: false }));
+            if (selectedOption && !selectedOption.isSeparator) {
+              setPartner(selectedOption);
+              if (fieldErrors.partner) {
+                setFieldErrors(prev => ({ ...prev, partner: false }));
+              }
             }
           }}
           options={partnerOptions}
@@ -130,6 +264,50 @@ const Form = ({
                 borderColor: fieldErrors.partner ? '#dc2626' : baseStyles['&:hover']?.borderColor,
               },
             }),
+            option: (baseStyles, state) => {
+              const isSeparator = state.data.isSeparator;
+              return {
+                ...baseStyles,
+                backgroundColor: isSeparator ? '#f3f4f6' : (state.isFocused ? '#e5e7eb' : baseStyles.backgroundColor),
+                color: isSeparator ? '#6b7280' : baseStyles.color,
+                fontWeight: isSeparator ? 'bold' : baseStyles.fontWeight,
+                cursor: isSeparator ? 'default' : 'pointer',
+                fontSize: isSeparator ? '12px' : baseStyles.fontSize,
+                padding: isSeparator ? '8px 12px' : baseStyles.padding,
+              };
+            },
+          }}
+          components={{
+            Option: ({ children, ...props }) => {
+              if (props.data.isSeparator) {
+                return (
+                  <div 
+                    style={{ 
+                      padding: '8px 12px', 
+                      background: 'linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)', 
+                      color: '#ffffff', 
+                      fontWeight: 'bold',
+                      fontSize: '15px',
+                      borderBottom: '1px solid #1e3a8a'
+                    }}
+                  >
+                    {props.data.label}
+                  </div>
+                );
+              }
+              return (
+                <div 
+                  {...props.innerProps}
+                  style={{
+                    ...props.innerProps.style,
+                    padding: '8px 12px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {children}
+                </div>
+              );
+            },
           }}
         />
 

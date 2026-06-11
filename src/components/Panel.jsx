@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import './Panel.css'
 
-const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions, onFilterChange }) => {
+const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions, onFilterChange, userEmail }) => {
   const [expandedRows, setExpandedRows] = useState(new Set())
   const [editingRow, setEditingRow] = useState(null)
   const [editFormData, setEditFormData] = useState({})
@@ -12,12 +12,14 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     partner: [],
     listingName: [],
     sourceType: [],
-    status: []
+    status: [],
+    listingLink: []
   })
   const [activeFilterDropdown, setActiveFilterDropdown] = useState(null)
   const [filterSearch, setFilterSearch] = useState('')
   const [debouncedFilterSearch, setDebouncedFilterSearch] = useState('')
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 })
   const dropdownRefs = useRef({})
 
   const statusOptions = [
@@ -35,7 +37,8 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     { key: 'partner', label: 'Client', accessor: 'partner' },
     { key: 'listingName', label: 'Listing Name', accessor: 'listingName' },
     { key: 'sourceType', label: 'Type', accessor: 'sourceType' },
-    { key: 'status', label: 'Status', accessor: 'status' }
+    { key: 'status', label: 'Status', accessor: 'status' },
+    { key: 'listingLink', label: 'Link', accessor: 'listingLink' }
   ]
 
   const isDueToday = (dueDate) => {
@@ -144,6 +147,8 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     columnConfig.forEach(column => {
       cache[column.key] = filterOptions?.[column.key] || []
     })
+    
+        
     return cache
   }, [filterOptions])
 
@@ -181,7 +186,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     return sortOrder === 'asc' ? sorted : sorted.reverse();
   }, [submissions, sortBy, sortOrder])
 
-  const toggleFilterDropdown = (columnKey) => {
+  const toggleFilterDropdown = (columnKey, event) => {
     if (activeFilterDropdown === columnKey) {
       setActiveFilterDropdown(null)
       setFilterSearch('')
@@ -190,10 +195,34 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
       setActiveFilterDropdown(columnKey)
       setFilterSearch('')
       setDebouncedFilterSearch('')
+      
+      // Calculate position for fixed dropdown with scroll compensation
+      const button = event.target
+      const headerCell = button.closest('th')
+      const headerRect = headerCell.getBoundingClientRect()
+      
+      // Use viewport coordinates for fixed positioning
+      let left = headerRect.left
+      let top = headerRect.bottom + 4
+      
+      // Boundary checking within viewport
+      const dropdownWidth = 300
+      const windowWidth = window.innerWidth
+      
+      if (left + dropdownWidth > windowWidth) {
+        left = windowWidth - dropdownWidth - 10
+      }
+      
+      if (left < 10) {
+        left = 10
+      }
+      
+      setDropdownPosition({ top, left })
     }
   }
 
   const handleFilterChange = (columnKey, value) => {
+    // console.log('handleFilterChange called:', { columnKey, value });
     setFilters(prev => {
       const currentFilters = prev[columnKey] || []
       let newFilters
@@ -208,6 +237,9 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
         ...prev,
         [columnKey]: newFilters
       }
+
+      // console.log('New filters state:', newFiltersState);
+      // console.log('Calling onFilterChange with new filters');
 
       // Trigger server-side filtering
       onFilterChange(newFiltersState)
@@ -231,7 +263,8 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
       partner: [],
       listingName: [],
       sourceType: [],
-      status: []
+      status: [],
+      listingLink: []
     }
     setFilters(newFiltersState)
     onFilterChange(newFiltersState)
@@ -248,6 +281,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   }
 
   const getFilteredValues = useCallback((columnKey, searchValue) => {
+    // For other columns, use the existing filter options
     const allValues = uniqueValuesCache[columnKey] || []
     if (!searchValue) return allValues
     
@@ -278,16 +312,78 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
 
   const FilterDropdown = React.memo(({ columnKey }) => {
     const [localFilterSearch, setLocalFilterSearch] = useState('')
+    const [searchResults, setSearchResults] = useState([])
+    const [isSearching, setIsSearching] = useState(false)
     const column = columnConfig.find(col => col.key === columnKey)
     const allValues = uniqueValuesCache[columnKey] || []
     const filteredValues = getFilteredValues(columnKey, localFilterSearch)
     const selectedValues = filters[columnKey] || []
     const isActive = activeFilterDropdown === columnKey
     
+    // Handle LINK search
+    const handleLinkSearch = useCallback(async (searchValue) => {
+      if (columnKey !== 'listingLink') return
+      
+      if (!searchValue) {
+        setSearchResults([])
+        setIsSearching(false)
+        return
+      }
+      
+      setIsSearching(true)
+      
+      try {
+        const apiUrl = import.meta.env.VITE_API_URL || "/api";
+        const response = await fetch(
+          `${apiUrl}/search-links?email=${encodeURIComponent(userEmail)}&search=${encodeURIComponent(searchValue)}`
+        );
+        
+        if (!response.ok) {
+          console.error('Error searching links:', response.statusText);
+          setSearchResults([])
+          setIsSearching(false)
+          return
+        }
+        
+        const results = await response.json();
+        // console.log('LINK filter search (searchValue):', searchValue);
+        // console.log('Found matching links:', results.length);
+        // console.log('Matching links:', results);
+        
+        // Check if the specific URL we're looking for is found
+        // const testUrl = 'https://www.bizbuysell.com/business-opportunity/profitable-seasonal-boat-rental-business-for-sale-high-margins/2346198/'
+        // const foundTestUrl = results.includes(testUrl)
+        // console.log('Test URL found in results:', foundTestUrl)
+        
+        setSearchResults(results)
+        setIsSearching(false)
+      } catch (error) {
+        console.error('Error searching links:', error);
+        setSearchResults([])
+        setIsSearching(false)
+      }
+    }, [columnKey, userEmail])
+    
+    // Debounced search for LINK
+    useEffect(() => {
+      if (columnKey === 'listingLink') {
+        const timeoutId = setTimeout(() => {
+          handleLinkSearch(localFilterSearch)
+        }, 300)
+        
+        return () => clearTimeout(timeoutId)
+      }
+    }, [localFilterSearch, columnKey, handleLinkSearch])
+    
     if (!isActive) return null
     
-    // Only render filtered options if search is ready
-    const displayValues = localFilterSearch ? filteredValues : allValues
+    // Handle LINK column differently - use search results or empty
+    let displayValues
+    if (columnKey === 'listingLink') {
+      displayValues = localFilterSearch ? searchResults : []
+    } else {
+      displayValues = localFilterSearch ? filteredValues : allValues
+    }
     
     return (
       <div 
@@ -305,7 +401,10 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
             }}
             className="filter-search-input"
           />
-                  </div>
+          {columnKey === 'listingLink' && isSearching && (
+            <div className="search-loading">Searching...</div>
+          )}
+        </div>
         
         <div className="filter-actions">
           <button 
@@ -464,21 +563,15 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                       <span className="header-text">{column.label}</span>
                       <button 
                         className={`filter-btn ${hasFilter ? 'active' : ''}`}
-                        onClick={() => toggleFilterDropdown(column.key)}
+                        onClick={(e) => toggleFilterDropdown(column.key, e)}
                         title="Filter this column"
                       >
                         ▼
                       </button>
                     </div>
-                    {activeFilterDropdown === column.key && (
-                      <div className="filter-dropdown-container">
-                        <FilterDropdown columnKey={column.key} />
-                      </div>
-                    )}
                   </th>
                 )
               })}
-              <th className="action-header">Link</th>
               <th className="action-header">Edit</th>
             </tr>
           </thead>
@@ -496,39 +589,61 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                     className={`clickable-row ${isDueToday(submission.dueDate) && submission.status !== 'Axed' && submission.status !== 'Added in Bitrix' ? 'due-today' : ''}`}
                     onClick={() => toggleRow(submission.submissionId)}
                   >
-                    <td className="submission-id">
-                      {submission.timestamp ? 
-                        (() => {
+                    {columnConfig.map(column => {
+                      let value = submission[column.accessor]
+                      
+                      // Special handling for entry date
+                      if (column.key === 'entryDate') {
+                        if (value) {
                           try {
                             // Handle both Google Sheets (YYYY-MM-DD HH:MM:SS) and Supabase ISO (YYYY-MM-DDTHH:MM:SSZ) formats
-                            const dateStr = submission.timestamp.trim();
+                            const dateStr = value.trim();
                             // Extract just the date part - split on space for Google Sheets or 'T' for ISO format
                             const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.split(' ')[0];
-                            return dateOnly;
+                            value = dateOnly;
                           } catch (error) {
-                            console.error('Error parsing timestamp:', submission.timestamp, error);
-                            return 'Invalid Date';
+                            console.error('Error parsing timestamp:', value, error);
+                            value = 'Invalid Date';
                           }
-                        })() : 'N/A'}
-                    </td>
-                    <td>{submission.partner}</td>
-                    <td>{submission.listingName}</td>
-                    <td>{submission.sourceType}</td>
-                    <td>
-                      <span className={`status-badge ${submission.status?.toLowerCase().replace(/\s+/g, '-') || 'no-status'}`}>
-                        {submission.status || 'N/A'}
-                      </span>
-                    </td>
-                    <td>
-                      <a
-                        href={submission.listingLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Open
-                      </a>
-                    </td>
+                        } else {
+                          value = 'N/A'
+                        }
+                      }
+                      
+                      // Special handling for status
+                      if (column.key === 'status') {
+                        return (
+                          <td key={column.key}>
+                            <span className={`status-badge ${submission.status?.toLowerCase().replace(/\s+/g, '-') || 'no-status'}`}>
+                              {submission.status || 'N/A'}
+                            </span>
+                          </td>
+                        )
+                      }
+                      
+                      // Special handling for listingLink - show Open button
+                      if (column.key === 'listingLink') {
+                        return (
+                          <td key={column.key}>
+                            <a
+                              href={submission.listingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              Open
+                            </a>
+                          </td>
+                        )
+                      }
+                      
+                      // Default handling for other columns
+                      return (
+                        <td key={column.key} className={column.key === 'entryDate' ? 'submission-id' : ''}>
+                          {value || 'N/A'}
+                        </td>
+                      )
+                    })}
                     <td>
                       <button alt="Edit Entry" title="Edit Entry"
                         className="edit-btn"
@@ -650,6 +765,24 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                               <span className="detail-label">Notes:</span>
                               <span className="detail-value">{submission.notes || 'N/A'}</span>
                             </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Listing Link:</span>
+                              <span className="detail-value listing-link">
+                                {submission.listingLink ? (
+                                  <a 
+                                    href={submission.listingLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title={submission.listingLink}
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    {submission.listingLink}
+                                  </a>
+                                ) : (
+                                  'N/A'
+                                )}
+                              </span>
+                            </div>
                           </div>
                           )}
                         </div>
@@ -662,6 +795,20 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
           </tbody>
         </table>
       </div>
+
+      {/* Filter dropdown containers rendered outside table */}
+      {activeFilterDropdown && (
+        <div 
+          className="filter-dropdown-container"
+          style={{
+            position: 'fixed',
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`
+          }}
+        >
+          <FilterDropdown columnKey={activeFilterDropdown} />
+        </div>
+      )}
 
       {pagination && pagination.totalPages > 1 && (
         <div className="pagination">

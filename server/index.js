@@ -13,7 +13,7 @@ dotenv.config({ path: join(__dirname, '.env') })
 
 // Now import services that depend on environment variables
 import { getPartners } from './googleSheetsService.js'
-import { getUserEmail, saveData, getUserSubmissions, updateSubmission, checkDuplicateSubmission, getAllSubmissions, normalizeUrl, getFilterOptions } from './supabaseService.js'
+import { getUserEmail, saveData, getUserSubmissions, updateSubmission, checkDuplicateSubmission, getAllSubmissions, normalizeUrl, getFilterOptions, clearCache } from './supabaseService.js'
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -89,6 +89,8 @@ const ADMIN_EMAILS = ['tanveer@regaliscapital.com', 'n8n@regaliscapital.com']
 app.get('/api/submissions', async (req, res) => {
   try {
     const { email, page = 1, limit = 50, filters } = req.query
+    // console.log('Submissions endpoint called:', { email, page, limit, filters });
+    
     if (!email) {
       return res.status(400).json({ error: 'Email parameter required' })
     }
@@ -97,11 +99,16 @@ app.get('/api/submissions', async (req, res) => {
     const limitNum = parseInt(limit, 10)
     const filtersObj = filters ? JSON.parse(filters) : {}
     
+    // console.log('Parsed filters:', filtersObj);
+    // console.log('Is admin:', ADMIN_EMAILS.includes(email));
+    
     // Check if user is admin
     if (ADMIN_EMAILS.includes(email)) {
+      // console.log('Calling getAllSubmissions');
       const data = await getAllSubmissions(pageNum, limitNum, filtersObj)
       res.json(data)
     } else {
+      // console.log('Calling getUserSubmissions');
       const data = await getUserSubmissions(email, pageNum, limitNum, filtersObj)
       res.json(data)
     }
@@ -133,6 +140,36 @@ app.get('/api/filter-options', async (req, res) => {
   } catch (error) {
     console.error('Error fetching filter options:', error)
     res.status(500).json({ error: 'Failed to fetch filter options' })
+  }
+})
+
+// Temporary endpoint to clear cache for debugging
+app.post('/api/clear-cache', (req, res) => {
+  try {
+    // console.log('Cache clear endpoint called')
+    clearCache()
+    // console.log('Cache cleared successfully')
+    res.json({ message: 'Cache cleared successfully' })
+  } catch (error) {
+    console.error('Error clearing cache:', error)
+    res.status(500).json({ error: 'Failed to clear cache' })
+  }
+})
+
+// Search endpoint for LINK filter
+app.get('/api/search-links', async (req, res) => {
+  try {
+    const { email, search } = req.query
+    if (!search) {
+      return res.json([])
+    }
+    
+    const { searchListingLinks } = await import('./supabaseService.js')
+    const results = await searchListingLinks(email, search)
+    res.json(results)
+  } catch (error) {
+    console.error('Error searching links:', error)
+    res.status(500).json({ error: 'Failed to search links' })
   }
 })
 

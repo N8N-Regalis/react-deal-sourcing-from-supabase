@@ -39,8 +39,46 @@ function setCache(key, data, customTTL = null) {
   });
 }
 
-function clearCache() {
+export function clearCache() {
   cache.clear();
+}
+
+// Search listing links across all submissions
+export async function searchListingLinks(email, searchTerm) {
+  try {
+    // console.log("Searching listing links for:", email, "search:", searchTerm);
+    
+    // Build query to search for listing links that match the search term
+    let query = getSupabaseClient()
+      .from('submissions')
+      .select('listing_link')
+      .ilike('listing_link', `%${searchTerm}%`);
+
+    // Filter by user email if not admin
+    if (email && !['tanveer@regaliscapital.com', 'n8n@regaliscapital.com'].includes(email)) {
+      query = query.eq('user_email', email);
+    }
+
+    // Limit results to prevent performance issues
+    query = query.limit(100);
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Error searching listing links:", error);
+      return [];
+    }
+
+    // Extract unique links
+    const uniqueLinks = [...new Set(data?.map(row => row.listing_link).filter(Boolean) || [])];
+    
+    // console.log(`Found ${uniqueLinks.length} matching links for search: "${searchTerm}"`);
+    
+    return uniqueLinks;
+  } catch (error) {
+    console.error("Error searching listing links:", error);
+    return [];
+  }
 }
 
 /**
@@ -322,6 +360,11 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
       query = query.in('status', filters.status);
     }
 
+    if (filters.listingLink && filters.listingLink.length > 0) {
+      // console.log("Applying listingLink filter:", filters.listingLink);
+      query = query.in('listing_link', filters.listingLink);
+    }
+
     // Calculate pagination
     const offset = (page - 1) * limit;
     
@@ -329,6 +372,11 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
     query = query.order('timestamp', { ascending: false }).range(offset, offset + limit - 1);
 
     const { data, error, count } = await query;
+
+    // console.log("Query executed with filters:", filters);
+    // console.log("Query results - data length:", data?.length || 0);
+    // console.log("Query results - total count:", count);
+    // console.log("Query results - sample data:", data?.slice(0, 2));
 
     if (error) {
       console.error("Error fetching submissions:", error);
@@ -400,6 +448,11 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
       query = query.in('status', filters.status);
     }
 
+    if (filters.listingLink && filters.listingLink.length > 0) {
+      // console.log("Applying listingLink filter in getAllSubmissions:", filters.listingLink);
+      query = query.in('listing_link', filters.listingLink);
+    }
+
     // Calculate pagination
     const offset = (page - 1) * limit;
     
@@ -454,7 +507,7 @@ export async function getFilterOptions(email) {
 
     console.log("Fetching filter options from Supabase for:", email);
     
-    // Build query
+    // Build query - exclude listing_link for performance, handle it client-side
     let query = getSupabaseClient().from('submissions').select('timestamp, partner_name, listing_name, source_type, status');
 
     // Filter by user email if not admin
@@ -462,7 +515,9 @@ export async function getFilterOptions(email) {
       query = query.eq('user_email', email);
     }
 
-    const { data, error } = await query;
+    console.log("Fetching filter options from Supabase for:", email);
+
+    const { data, error } = await query.limit(1000);
 
     if (error) {
       console.error("Error fetching filter options:", error);
@@ -471,20 +526,21 @@ export async function getFilterOptions(email) {
         partner: [],
         listingName: [],
         sourceType: [],
-        status: []
+        status: [],
+        listingLink: [] // Empty for client-side search
       };
     }
 
-    const rows = data || [];
+    console.log("Filter options query completed, data length:", data?.length || 0);
 
-    // Extract unique values for each column
+    // Extract unique values for each column (excluding listing_link)
     const entryDates = new Set();
     const partners = new Set();
     const listingNames = new Set();
     const sourceTypes = new Set();
     const statuses = new Set();
 
-    rows.forEach((row) => {
+    data.forEach((row) => {
       // Entry Date (timestamp)
       if (row.timestamp) {
         try {
@@ -512,6 +568,7 @@ export async function getFilterOptions(email) {
       statuses.add(row.status || '(Blank)');
     });
 
+    
     // Convert to arrays and sort
     const sortArray = (arr) => {
       const array = Array.from(arr);
@@ -527,7 +584,8 @@ export async function getFilterOptions(email) {
       partner: sortArray(partners),
       listingName: sortArray(listingNames),
       sourceType: sortArray(sourceTypes),
-      status: sortArray(statuses)
+      status: sortArray(statuses),
+      listingLink: [] // Empty for client-side search
     };
 
     // Cache the result
@@ -541,7 +599,8 @@ export async function getFilterOptions(email) {
       partner: [],
       listingName: [],
       sourceType: [],
-      status: []
+      status: [],
+      listingLink: []
     };
   }
 }

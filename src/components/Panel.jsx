@@ -80,7 +80,8 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
 
   const saveEdit = async () => {
     try {
-      const response = await fetch('/api/update-submission', {
+      const apiUrl = import.meta.env.VITE_API_URL || "/api";
+      const response = await fetch(`${apiUrl}/update-submission`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

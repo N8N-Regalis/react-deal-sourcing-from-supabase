@@ -494,7 +494,7 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
   }
 }
 
-// Get Filter Options (all unique values across all records)
+// Get Filter Options (all unique values via Supabase RPC for performance)
 export async function getFilterOptions(email) {
   try {
     // Check cache first
@@ -505,91 +505,40 @@ export async function getFilterOptions(email) {
       return cached;
     }
 
-    console.log("Fetching filter options from Supabase for:", email);
-    
-    // Build query - exclude listing_link for performance, handle it client-side
-    let query = getSupabaseClient().from('submissions').select('timestamp, partner_name, listing_name, source_type, status');
+    console.log("Fetching filter options via RPC for:", email);
 
-    // Filter by user email if not admin
-    if (email && !['tanveer@regaliscapital.com', 'n8n@regaliscapital.com'].includes(email)) {
-      query = query.eq('user_email', email);
-    }
+    // Pass null for admin users to get all records
+    const isAdmin = email && ['tanveer@regaliscapital.com', 'n8n@regaliscapital.com'].includes(email);
+    const rpcEmail = isAdmin ? null : email;
 
-    console.log("Fetching filter options from Supabase for:", email);
-
-    const { data, error } = await query.limit(1000);
+    const { data, error } = await getSupabaseClient()
+      .rpc('get_filter_options', { p_email: rpcEmail });
 
     if (error) {
-      console.error("Error fetching filter options:", error);
+      console.error("Error fetching filter options via RPC:", error);
       return {
         entryDate: [],
         partner: [],
         listingName: [],
         sourceType: [],
         status: [],
-        listingLink: [] // Empty for client-side search
+        listingLink: []
       };
     }
 
-    console.log("Filter options query completed, data length:", data?.length || 0);
-
-    // Extract unique values for each column (excluding listing_link)
-    const entryDates = new Set();
-    const partners = new Set();
-    const listingNames = new Set();
-    const sourceTypes = new Set();
-    const statuses = new Set();
-
-    data.forEach((row) => {
-      // Entry Date (timestamp)
-      if (row.timestamp) {
-        try {
-          const dateStr = row.timestamp.trim();
-          const dateOnly = dateStr.split(' ')[0];
-          const formattedDate = new Date(dateOnly).toLocaleDateString('en-CA');
-          entryDates.add(formattedDate);
-        } catch (error) {
-          entryDates.add('Invalid Date');
-        }
-      } else {
-        entryDates.add('(Blank)');
-      }
-
-      // Partner (partner_name)
-      partners.add(row.partner_name || '(Blank)');
-
-      // Listing Name (listing_name)
-      listingNames.add(row.listing_name || '(Blank)');
-
-      // Source Type (source_type)
-      sourceTypes.add(row.source_type || '(Blank)');
-
-      // Status (status)
-      statuses.add(row.status || '(Blank)');
-    });
-
-    
-    // Convert to arrays and sort
-    const sortArray = (arr) => {
-      const array = Array.from(arr);
-      return array.sort((a, b) => {
-        if (a === '(Blank)') return -1;
-        if (b === '(Blank)') return 1;
-        return a.localeCompare(b);
-      });
-    };
-
     const result = {
-      entryDate: sortArray(entryDates),
-      partner: sortArray(partners),
-      listingName: sortArray(listingNames),
-      sourceType: sortArray(sourceTypes),
-      status: sortArray(statuses),
-      listingLink: [] // Empty for client-side search
+      entryDate: data.entryDate || [],
+      partner: data.partner || [],
+      listingName: data.listingName || [],
+      sourceType: data.sourceType || [],
+      status: data.status || [],
+      listingLink: [] // Handled client-side via search
     };
 
     // Cache the result
     setCache(cacheKey, result);
+
+    console.log("Filter options loaded via RPC - dates:", result.entryDate.length, "partners:", result.partner.length);
 
     return result;
   } catch (error) {

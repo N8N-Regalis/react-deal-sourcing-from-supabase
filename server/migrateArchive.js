@@ -20,10 +20,9 @@ if (keyEnv && !keyEnv.startsWith("./") && !keyEnv.startsWith("/")) {
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 } else {
-  const keyFile =
-    keyEnv && (keyEnv.startsWith("./") || keyEnv.startsWith("/"))
-      ? keyEnv
-      : join(__dirname, "react-deal-sourcer-45126b11537a.json");
+  const keyFile = keyEnv && (keyEnv.startsWith("./") || keyEnv.startsWith("/"))
+  ? keyEnv.replace('./server/', './')  // Remove the duplicate 'server/' part
+  : join(__dirname, "react-deal-sourcer-45126b11537a.json");
   console.log("Using key file:", keyFile);
   auth = new google.auth.GoogleAuth({
     keyFile: keyFile,
@@ -41,12 +40,11 @@ function getSupabaseClient() {
   );
 }
 
-// Spreadsheet IDs
-const SUBMISSIONS_SHEET_ID = "1vRdVw3NywawevVlWVc9Rlu0m9PGcVb--6tVjkDLH4bg";
+// Spreadsheet ID
 const ARCHIVE_SHEET_ID = "1id2PtF2f4t5IIp8-87V2s5wgutuCC5QWGtYijIn28Js";
 
 // Function to fetch all data from Google Sheets
-async function fetchAllSubmissions(spreadsheetId, sheetName) {
+async function fetchAllArchive(spreadsheetId, sheetName) {
   try {
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: spreadsheetId,
@@ -89,32 +87,13 @@ function generateId(tableName) {
   return `${prefix}-${timestamp}-${random}`;
 }
 
-async function migrateData() {
+async function migrateArchive() {
   const supabase = getSupabaseClient();
-  console.log("Starting migration from Google Sheets to Supabase...");
-  
-  // Migrate submissions
-  console.log("\n=== Migrating Submissions ===");
-  const submissionsData = await fetchAllSubmissions(SUBMISSIONS_SHEET_ID, "Submissions");
-  console.log(`Found ${submissionsData.length} rows in Submissions sheet`);
-  
-  if (submissionsData.length > 0) {
-    const convertedSubmissions = submissionsData.map(row => convertRowToSupabase(row, "submissions"));
-    const batchSize = 100;
-    for (let i = 0; i < convertedSubmissions.length; i += batchSize) {
-      const batch = convertedSubmissions.slice(i, i + batchSize);
-      const { error } = await supabase.from("submissions").insert(batch);
-      if (error) {
-        console.error(`Error inserting batch ${i + 1}-${Math.min(i + batchSize, convertedSubmissions.length)}:`, error);
-      } else {
-        console.log(`Inserted batch ${i + 1}-${Math.min(i + batchSize, convertedSubmissions.length)} of ${convertedSubmissions.length}`);
-      }
-    }
-  }
+  console.log("Starting migration of Archive from Google Sheets to Supabase...");
   
   // Migrate archive
   console.log("\n=== Migrating Archive ===");
-  const archiveData = await fetchAllSubmissions(ARCHIVE_SHEET_ID, "Archive");
+  const archiveData = await fetchAllArchive(ARCHIVE_SHEET_ID, "Archive");
   console.log(`Found ${archiveData.length} rows in Archive sheet`);
   
   if (archiveData.length > 0) {
@@ -134,11 +113,9 @@ async function migrateData() {
   console.log("\n=== Migration Complete ===");
   
   // Verify migration
-  const { count: submissionsCount } = await supabase.from("submissions").select("*", { count: "exact", head: true });
   const { count: archiveCount } = await supabase.from("archive").select("*", { count: "exact", head: true });
   
-  console.log(`Total submissions in Supabase: ${submissionsCount}`);
   console.log(`Total archive items in Supabase: ${archiveCount}`);
 }
 
-migrateData().catch(console.error);
+migrateArchive().catch(console.error);

@@ -221,13 +221,7 @@ const Form = ({
       setNotes("");
       setDealStatus("Inquired");
     } catch (error) {
-      if (error.message === 'Listing Link already exists in the Submissions database.') {
-        alert("Listing Link already exists in the Submissions database.");
-      } else if (error.message === 'Listing Link already exists in the Archived Submissions database.') {
-        alert("Listing Link already exists in the Archived Submissions database.");
-      } else {
-        alert("Error saving data");
-      }
+      alert(error.message || "Error saving data");
       setStatus("");
     } finally {
       setIsSubmitting(false);

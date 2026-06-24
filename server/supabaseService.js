@@ -341,7 +341,64 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
 
     // Apply filters
     if (filters.entryDate && filters.entryDate.length > 0) {
-      query = query.in('timestamp', filters.entryDate);
+      // Use RPC to handle date filtering with proper SQL casting
+      const isAdmin = email && ['tanveer@regaliscapital.com', 'n8n@regaliscapital.com'].includes(email);
+      const rpcEmail = isAdmin ? null : email;
+      
+      const { data: rpcData, error: rpcError } = await getSupabaseClient()
+        .rpc('get_submissions_with_date_filter', { 
+          p_email: rpcEmail,
+          p_entry_dates: filters.entryDate,
+          p_partner_names: filters.partner || [],
+          p_listing_names: filters.listingName || [],
+          p_source_types: filters.sourceType || [],
+          p_statuses: filters.status || [],
+          p_listing_links: filters.listingLink || [],
+          p_offset: (page - 1) * limit,
+          p_limit: limit
+        });
+      
+      if (rpcError) {
+        console.error("Error fetching submissions via RPC:", rpcError);
+        // Fallback to regular query without date filter
+        console.log("Falling back to regular query without date filter");
+      } else {
+        // Process RPC results
+        const submissions = (rpcData || []).map((row) => ({
+          submissionId: row.id,
+          timestamp: row.timestamp,
+          partner: row.partner_name,
+          listingName: row.listing_name,
+          listingLink: row.listing_link,
+          brokerage: row.brokerage,
+          brokerName: row.broker_name,
+          brokerEmail: row.broker_email,
+          sourceType: row.source_type,
+          notes: row.notes,
+          cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+          status: row.status,
+          dueDate: row.due_date,
+          modifiedDate: row.modified_date,
+          sourcerEmail: row.sourcer_email,
+        }));
+
+        // Get total count - RPC returns scalar in data, not count
+        const { data: countData } = await getSupabaseClient()
+          .rpc('count_submissions_with_date_filter', { 
+            p_email: rpcEmail,
+            p_entry_dates: filters.entryDate,
+            p_partner_names: filters.partner || [],
+            p_listing_names: filters.listingName || [],
+            p_source_types: filters.sourceType || [],
+            p_statuses: filters.status || [],
+            p_listing_links: filters.listingLink || []
+          });
+
+        const total = countData || 0;
+        const result = { submissions, total, page, limit, totalPages: Math.ceil(total / limit) };
+        setCache(cacheKey, result, SUBMISSIONS_CACHE_TTL);
+        return result;
+      }
     }
 
     if (filters.partner && filters.partner.length > 0) {
@@ -418,7 +475,6 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
     const cacheKey = `allSubmissions_${page}_${limit}_${JSON.stringify(filters)}`;
     const cached = getCache(cacheKey);
     if (cached) {
-      console.log("Returning cached all submissions");
       return cached;
     }
 
@@ -429,7 +485,66 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
 
     // Apply filters
     if (filters.entryDate && filters.entryDate.length > 0) {
-      query = query.in('timestamp', filters.entryDate);
+      // Clear cache when date filters are present to ensure fresh data
+      clearCache();
+      
+      // Use RPC to handle date filtering with proper SQL casting
+      // getAllSubmissions is for admin users, so email is always null
+      
+      const { data: rpcData, error: rpcError } = await getSupabaseClient()
+        .rpc('get_submissions_with_date_filter', { 
+          p_email: null,
+          p_entry_dates: filters.entryDate,
+          p_partner_names: filters.partner || [],
+          p_listing_names: filters.listingName || [],
+          p_source_types: filters.sourceType || [],
+          p_statuses: filters.status || [],
+          p_listing_links: filters.listingLink || [],
+          p_offset: (page - 1) * limit,
+          p_limit: limit
+        });
+      
+      if (rpcError) {
+        console.error("Error fetching submissions via RPC:", rpcError);
+        // Fallback to regular query without date filter
+        console.log("Falling back to regular query without date filter");
+      } else {
+        // Process RPC results
+        const submissions = (rpcData || []).map((row) => ({
+          submissionId: row.id,
+          timestamp: row.timestamp,
+          partner: row.partner_name,
+          listingName: row.listing_name,
+          listingLink: row.listing_link,
+          brokerage: row.brokerage,
+          brokerName: row.broker_name,
+          brokerEmail: row.broker_email,
+          sourceType: row.source_type,
+          notes: row.notes,
+          cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+          status: row.status,
+          dueDate: row.due_date,
+          modifiedDate: row.modified_date,
+          sourcerEmail: row.sourcer_email,
+        }));
+
+        // Get total count - RPC returns scalar in data, not count
+        const { data: countData } = await getSupabaseClient()
+          .rpc('count_submissions_with_date_filter', { 
+            p_email: null,
+            p_entry_dates: filters.entryDate,
+            p_partner_names: filters.partner || [],
+            p_listing_names: filters.listingName || [],
+            p_source_types: filters.sourceType || [],
+            p_statuses: filters.status || [],
+            p_listing_links: filters.listingLink || []
+          });
+
+        const total = countData || 0;
+        const result = { submissions, total, page, limit, totalPages: Math.ceil(total / limit) };
+        setCache(cacheKey, result, SUBMISSIONS_CACHE_TTL);
+        return result;
+      }
     }
 
     if (filters.partner && filters.partner.length > 0) {
@@ -505,8 +620,6 @@ export async function getFilterOptions(email) {
       return cached;
     }
 
-    console.log("Fetching filter options via RPC for:", email);
-
     // Pass null for admin users to get all records
     const isAdmin = email && ['tanveer@regaliscapital.com', 'n8n@regaliscapital.com'].includes(email);
     const rpcEmail = isAdmin ? null : email;
@@ -537,8 +650,6 @@ export async function getFilterOptions(email) {
 
     // Cache the result
     setCache(cacheKey, result);
-
-    console.log("Filter options loaded via RPC - dates:", result.entryDate.length, "partners:", result.partner.length);
 
     return result;
   } catch (error) {

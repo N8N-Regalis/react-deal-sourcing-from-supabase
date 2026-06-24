@@ -451,7 +451,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
         if (column.key === 'entryDate' && value) {
           try {
             const dateStr = value.trim()
-            const dateOnly = dateStr.split(' ')[0]
+            const dateOnly = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr.split(' ')[0]
             value = new Date(dateOnly).toLocaleDateString('en-CA')
           } catch (error) {
             value = 'Invalid Date'

@@ -124,7 +124,12 @@ app.put('/api/update-submission', async (req, res) => {
     res.json(result)
   } catch (error) {
     console.error('Error updating submission:', error)
-    res.status(500).json({ error: 'Failed to update submission' })
+    // Check if it's a duplicate error
+    if (error.message.includes('Duplicate entry') || error.message.includes('already exists')) {
+      res.status(409).json({ error: error.message })
+    } else {
+      res.status(500).json({ error: 'Failed to update submission' })
+    }
   }
 })
 

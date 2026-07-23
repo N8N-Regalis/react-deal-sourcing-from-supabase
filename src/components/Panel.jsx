@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import './Panel.css'
 
-const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions, onFilterChange, userEmail }) => {
+const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions, onFilterChange, userEmail, partners }) => {
   const [expandedRows, setExpandedRows] = useState(new Set())
   const [editingRow, setEditingRow] = useState(null)
   const [editFormData, setEditFormData] = useState({})
@@ -66,6 +66,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   const startEdit = (submission) => {
     setEditingRow(submission.submissionId)
     setEditFormData({
+      partner: submission.partner || '',
       cimReceived: submission.cimReceived || 'FALSE',
       status: submission.status || '',
       notes: submission.notes || '',
@@ -81,29 +82,39 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   const saveEdit = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || "/api";
+      const requestBody = {
+        submissionId: editingRow,
+        partner: editFormData.partner,
+        cimReceived: editFormData.cimReceived,
+        status: editFormData.status,
+        notes: editFormData.notes,
+        dueDate: editFormData.dueDate
+      };
+      // console.log('Sending update request:', requestBody);
+      
       const response = await fetch(`${apiUrl}/update-submission`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          submissionId: editingRow,
-          cimReceived: editFormData.cimReceived,
-          status: editFormData.status,
-          notes: editFormData.notes,
-          dueDate: editFormData.dueDate
-        })
+        body: JSON.stringify(requestBody)
       })
 
       if (response.ok) {
         setEditingRow(null)
         setEditFormData({})
         onRefresh(pagination?.page || 1, filters, pagination?.limit || 50) // Refresh the current page with filters
+      } else if (response.status === 409) {
+        // Handle duplicate error
+        const errorData = await response.json()
+        alert(errorData.error || 'This listing link already exists for the selected client.')
       } else {
         console.error('Failed to update submission')
+        alert('Failed to update submission. Please try again.')
       }
     } catch (error) {
       console.error('Error updating submission:', error)
+      alert('Error updating submission. Please try again.')
     }
   }
 
@@ -669,6 +680,18 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                             <div className="edit-form">
                               <div className="edit-form-grid">
                                 <div className="edit-item">
+                                  <label>Client Name:</label>
+                                  <select
+                                    value={editFormData.partner}
+                                    onChange={(e) => handleEditChange('partner', e.target.value)}
+                                  >
+                                    <option value="">Select Client</option>
+                                    {partners.map(partner => (
+                                      <option key={partner} value={partner}>{partner}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="edit-item">
                                   <label>CIM Received:</label>
                                   <div className="checkbox-toggle">
                                     <input
@@ -690,20 +713,20 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                                     ))}
                                   </select>
                                 </div>
-                                <div className="edit-item full-width">
-                                  <label>Notes:</label>
-                                  <textarea
-                                    value={editFormData.notes}
-                                    onChange={(e) => handleEditChange('notes', e.target.value)}
-                                    rows="3"
-                                  />
-                                </div>
                                 <div className="edit-item">
                                   <label>Due Date:</label>
                                   <input
                                     type="date"
                                     value={editFormData.dueDate}
                                     onChange={(e) => handleEditChange('dueDate', e.target.value)}
+                                  />
+                                </div>                                
+                                <div className="edit-item full-width">
+                                  <label>Notes:</label>
+                                  <textarea
+                                    value={editFormData.notes}
+                                    onChange={(e) => handleEditChange('notes', e.target.value)}
+                                    rows="3"
                                   />
                                 </div>
                               </div>

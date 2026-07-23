@@ -159,26 +159,30 @@ async function checkDuplicateInTable(tableName, partnerName, listingLink) {
     console.log("Partner Name (cleaned):", cleanedPartnerName);
     console.log("Listing Link (normalized):", normalizedListingLink);
 
-    // First filter by partner name
-    const { data: partnerMatches, error: partnerError } = await getSupabaseClient()
+    // Extract a unique identifier from the URL for initial filtering (e.g., the path after domain)
+    const urlIdentifier = normalizedListingLink.split('/').slice(-2).join('/');
+
+    // Filter by both partner name and listing link pattern to reduce result set
+    const { data: matches, error: queryError } = await getSupabaseClient()
       .from(tableName)
       .select('listing_link')
-      .eq('partner_name', cleanedPartnerName);
+      .eq('partner_name', cleanedPartnerName)
+      .ilike('listing_link', `%${urlIdentifier}%`);
 
-    if (partnerError) {
-      console.error(`Error querying ${tableName} by partner:`, partnerError);
+    if (queryError) {
+      console.error(`Error querying ${tableName}:`, queryError);
       return false;
     }
 
-    console.log(`Partner matches found in ${tableName}:`, partnerMatches?.length || 0);
+    console.log(`Matches found in ${tableName}:`, matches?.length || 0);
 
-    // If no partner matches, no need to check URLs
-    if (!partnerMatches || partnerMatches.length === 0) {
+    // If no matches, no need to check URLs
+    if (!matches || matches.length === 0) {
       return false;
     }
 
     // Now check URL matches only for partner matches
-    for (const row of partnerMatches) {
+    for (const row of matches) {
       const existingLink = row.listing_link;
       
       if (!existingLink) continue;
@@ -193,6 +197,15 @@ async function checkDuplicateInTable(tableName, partnerName, listingLink) {
       }
       
       const linkMatch = normalizedExistingLink === normalizedListingLink;
+      
+      // Debug logging for specific URLs
+      if (existingLink.includes('2522867') || existingLink.includes('siomai')) {
+        console.log("Comparing with existing link:", existingLink);
+        console.log("Normalized existing link:", normalizedExistingLink);
+        console.log("Normalized input link:", normalizedListingLink);
+        console.log("Match result:", linkMatch);
+      }
+      
       if (linkMatch) {
         console.log(`Duplicate found in ${tableName}`);
         return true;
@@ -670,6 +683,52 @@ export async function updateSubmission(data) {
   try {
     console.log("Update submission data received:", data);
     
+    // Clean partner name by removing special characters
+    const cleanedPartnerName = data.partner ? data.partner.replace(/[❗⭐]/g, '').trim() : data.partner;
+    
+    // Fetch current submission to get listing link
+    const { data: currentSubmission, error: fetchError } = await getSupabaseClient()
+      .from('submissions')
+      .select('partner_name, listing_link')
+      .eq('id', data.submissionId)
+      .single();
+    
+    if (fetchError) {
+      console.error("Error fetching current submission:", fetchError);
+      throw new Error('Failed to fetch current submission');
+    }
+    
+    // Check if partner name is changing
+    if (currentSubmission.partner_name !== cleanedPartnerName) {
+      console.log("Partner name is changing, checking for duplicates...");
+      console.log("Old partner:", currentSubmission.partner_name);
+      console.log("New partner:", cleanedPartnerName);
+      console.log("Listing link:", currentSubmission.listing_link);
+      
+      // Check for duplicate in submissions table (excluding current submission)
+      const duplicateInSubmissions = await checkDuplicateExcludingId(
+        'submissions',
+        cleanedPartnerName,
+        currentSubmission.listing_link,
+        data.submissionId
+      );
+      
+      if (duplicateInSubmissions) {
+        throw new Error(`Duplicate entry: Client "${cleanedPartnerName}" already has this listing link in the Submissions database.`);
+      }
+      
+      // Check for duplicate in archive table
+      const duplicateInArchive = await checkDuplicateInTable(
+        'archive',
+        cleanedPartnerName,
+        currentSubmission.listing_link
+      );
+      
+      if (duplicateInArchive) {
+        throw new Error(`Duplicate entry: Client "${cleanedPartnerName}" already has this listing link in the Archived Submissions database.`);
+      }
+    }
+    
     // Format current timestamp in EST for Modified Date
     const modifiedDate = new Date()
       .toLocaleString("en-US", {
@@ -685,29 +744,32 @@ export async function updateSubmission(data) {
       .replace(/(\d+)\/(\d+)\/(\d+), (\d+):(\d+):(\d+)/, "$3-$1-$2 $4:$5:$6");
 
     console.log("Updating with data:", {
+      partner: cleanedPartnerName,
       cimReceived: data.cimReceived,
       status: data.status,
       dueDate: data.dueDate,
       modifiedDate: modifiedDate
     });
 
-    const { error } = await getSupabaseClient()
+    const { error, data: updateData } = await getSupabaseClient()
       .from('submissions')
       .update({
+        partner_name: cleanedPartnerName,
         cim_received: data.cimReceived === 'TRUE',
         status: data.status,
         due_date: data.dueDate || null,
         modified_date: modifiedDate,
         notes: data.notes
       })
-      .eq('id', data.submissionId);
+      .eq('id', data.submissionId)
+      .select();
 
     if (error) {
       console.error("Error updating submission:", error);
       throw error;
     }
 
-    console.log("Submission updated successfully");
+    // console.log("Submission updated successfully. Updated data:", updateData);
 
     // Clear cache when submission is updated to ensure consistency
     clearCache();
@@ -716,6 +778,73 @@ export async function updateSubmission(data) {
   } catch (error) {
     console.error("Error updating submission:", error);
     throw error;
+  }
+}
+
+// Helper function to check for duplicates excluding a specific ID
+async function checkDuplicateExcludingId(tableName, partnerName, listingLink, excludeId) {
+  try {
+    // Normalize the listing link for comparison
+    const normalizedListingLink = normalizeUrl(listingLink);
+    
+    // Clean partner name by removing special characters
+    const cleanedPartnerName = partnerName.replace(/[❗⭐]/g, '').trim();
+
+    console.log(`Checking for duplicate in ${tableName} table (excluding ID: ${excludeId}):`);
+    console.log("Partner Name (cleaned):", cleanedPartnerName);
+    console.log("Listing Link (normalized):", normalizedListingLink);
+
+    // Extract a unique identifier from the URL for initial filtering
+    const urlIdentifier = normalizedListingLink.split('/').slice(-2).join('/');
+
+    // Filter by both partner name and listing link pattern, excluding the current ID
+    const { data: matches, error: queryError } = await getSupabaseClient()
+      .from(tableName)
+      .select('listing_link, id')
+      .eq('partner_name', cleanedPartnerName)
+      .ilike('listing_link', `%${urlIdentifier}%`)
+      .neq('id', excludeId);
+
+    if (queryError) {
+      console.error(`Error querying ${tableName}:`, queryError);
+      return false;
+    }
+
+    console.log(`Matches found in ${tableName}:`, matches?.length || 0);
+
+    // If no matches, no need to check URLs
+    if (!matches || matches.length === 0) {
+      return false;
+    }
+
+    // Now check URL matches only for partner matches
+    for (const row of matches) {
+      const existingLink = row.listing_link;
+      
+      if (!existingLink) continue;
+      
+      // Normalize existing link for comparison
+      let normalizedExistingLink;
+      try {
+        normalizedExistingLink = normalizeUrl(existingLink);
+      } catch (error) {
+        // If existing link is invalid, skip this row
+        continue;
+      }
+      
+      const linkMatch = normalizedExistingLink === normalizedListingLink;
+      
+      if (linkMatch) {
+        console.log(`Duplicate found in ${tableName}`);
+        return true;
+      }
+    }
+
+    console.log(`No duplicate found in ${tableName}`);
+    return false;
+  } catch (error) {
+    console.error(`Error checking duplicate in ${tableName}:`, error);
+    return false;
   }
 }
 

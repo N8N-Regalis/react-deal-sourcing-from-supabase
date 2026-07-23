@@ -177,6 +177,7 @@ function App() {
                 filterOptions={filterOptions}
                 onFilterChange={(filters) => loadSubmissions(1, filters, pagination.limit)}
                 userEmail={userEmail}
+                partners={partners}
               />
             )}
           </>

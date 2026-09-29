@@ -308,6 +308,7 @@ export async function saveData(data) {
       source_type: data.sourceType,
       notes: data.notes || "",
       cim_received: false,
+      sent_by_client: data.sentByClient === 'Yes',
       status: data.status || "",
       due_date: null,
       modified_date: null,
@@ -389,6 +390,7 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
           sourceType: row.source_type,
           notes: row.notes,
           cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+      sentByClient: row.sent_by_client ? 'TRUE' : 'FALSE',
           status: row.status,
           dueDate: row.due_date,
           modifiedDate: row.modified_date,
@@ -430,6 +432,10 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
       query = query.in('status', filters.status);
     }
 
+    if (filters.sentByClient && filters.sentByClient.length > 0) {
+      query = query.in('sent_by_client', filters.sentByClient.map(v => v === 'Yes'));
+    }
+
     if (filters.listingLink && filters.listingLink.length > 0) {
       // console.log("Applying listingLink filter:", filters.listingLink);
       query = query.in('listing_link', filters.listingLink);
@@ -465,6 +471,7 @@ export async function getUserSubmissions(email, page = 1, limit = 50, filters = 
       sourceType: row.source_type,
       notes: row.notes,
       cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+      sentByClient: row.sent_by_client ? 'TRUE' : 'FALSE',
       status: row.status,
       dueDate: row.due_date,
       modifiedDate: row.modified_date,
@@ -535,6 +542,7 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
           sourceType: row.source_type,
           notes: row.notes,
           cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+      sentByClient: row.sent_by_client ? 'TRUE' : 'FALSE',
           status: row.status,
           dueDate: row.due_date,
           modifiedDate: row.modified_date,
@@ -576,6 +584,10 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
       query = query.in('status', filters.status);
     }
 
+    if (filters.sentByClient && filters.sentByClient.length > 0) {
+      query = query.in('sent_by_client', filters.sentByClient.map(v => v === 'Yes'));
+    }
+
     if (filters.listingLink && filters.listingLink.length > 0) {
       // console.log("Applying listingLink filter in getAllSubmissions:", filters.listingLink);
       query = query.in('listing_link', filters.listingLink);
@@ -606,6 +618,7 @@ export async function getAllSubmissions(page = 1, limit = 50, filters = {}) {
       sourceType: row.source_type,
       notes: row.notes,
       cimReceived: row.cim_received ? 'TRUE' : 'FALSE',
+      sentByClient: row.sent_by_client ? 'TRUE' : 'FALSE',
       status: row.status,
       dueDate: row.due_date,
       modifiedDate: row.modified_date,
@@ -756,6 +769,7 @@ export async function updateSubmission(data) {
       .update({
         partner_name: cleanedPartnerName,
         cim_received: data.cimReceived === 'TRUE',
+        sent_by_client: data.sentByClient === 'TRUE',
         status: data.status,
         due_date: data.dueDate || null,
         modified_date: modifiedDate,

@@ -18,6 +18,7 @@ const Form = ({
   const [sourceType, setSourceType] = useState("New");
   const [notes, setNotes] = useState("");
   const [dealStatus, setDealStatus] = useState("Inquired");
+  const [sentByClient, setSentByClient] = useState("No");
   const [status, setStatus] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
@@ -206,6 +207,7 @@ const Form = ({
         sourceType,
         notes,
         status: dealStatus,
+        sentByClient,
       });
 
       setStatus(`Saved ${result.id}`);
@@ -220,6 +222,7 @@ const Form = ({
       setSourceType("New");
       setNotes("");
       setDealStatus("Inquired");
+      setSentByClient("No");
     } catch (error) {
       alert(error.message || "Error saving data");
       setStatus("");
@@ -406,6 +409,16 @@ const Form = ({
           <option value="For Broker Intro Call">For Broker Intro Call</option>
           <option value="Added in Bitrix">Added in Bitrix</option>
           <option value="Axed">Axed</option>
+        </select>
+
+        <label>Sent by Client</label>
+        <select
+          value={sentByClient}
+          onChange={(e) => setSentByClient(e.target.value)}
+          disabled={isSubmitting}
+        >
+          <option value="No">No</option>
+          <option value="Yes">Yes</option>
         </select>
 
         <label>Notes</label>

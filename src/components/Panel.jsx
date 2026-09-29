@@ -13,6 +13,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     listingName: [],
     sourceType: [],
     status: [],
+    sentByClient: [],
     listingLink: []
   })
   const [activeFilterDropdown, setActiveFilterDropdown] = useState(null)
@@ -38,6 +39,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     { key: 'listingName', label: 'Listing Name', accessor: 'listingName' },
     { key: 'sourceType', label: 'Type', accessor: 'sourceType' },
     { key: 'status', label: 'Status', accessor: 'status' },
+    { key: 'sentByClient', label: 'Sent by Client', accessor: 'sentByClient' },
     { key: 'listingLink', label: 'Link', accessor: 'listingLink' }
   ]
 
@@ -68,6 +70,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
     setEditFormData({
       partner: submission.partner || '',
       cimReceived: submission.cimReceived || 'FALSE',
+      sentByClient: submission.sentByClient || 'FALSE',
       status: submission.status || '',
       notes: submission.notes || '',
       dueDate: submission.dueDate || ''
@@ -86,6 +89,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
         submissionId: editingRow,
         partner: editFormData.partner,
         cimReceived: editFormData.cimReceived,
+        sentByClient: editFormData.sentByClient,
         status: editFormData.status,
         notes: editFormData.notes,
         dueDate: editFormData.dueDate
@@ -157,7 +161,9 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   const uniqueValuesCache = useMemo(() => {
     const cache = {}
     columnConfig.forEach(column => {
-      cache[column.key] = filterOptions?.[column.key] || []
+      cache[column.key] = column.key === 'sentByClient'
+        ? ['Yes', 'No']
+        : (filterOptions?.[column.key] || [])
     })
     
         
@@ -276,6 +282,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
       listingName: [],
       sourceType: [],
       status: [],
+      sentByClient: [],
       listingLink: []
     }
     setFilters(newFiltersState)
@@ -283,7 +290,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
   }
 
   const selectAllInColumn = (columnKey) => {
-    const allValues = filterOptions[columnKey] || []
+    const allValues = columnKey === 'sentByClient' ? ['Yes', 'No'] : (filterOptions[columnKey] || [])
     const newFiltersState = {
       ...filters,
       [columnKey]: allValues
@@ -468,7 +475,12 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
             value = 'Invalid Date'
           }
         }
-        
+
+        // Special handling for sent by client (stored as 'TRUE'/'FALSE' strings)
+        if (column.key === 'sentByClient') {
+          value = value === 'TRUE' ? 'Yes' : 'No'
+        }
+
         const displayValue = value || '(Blank)'
         
         if (!columnFilters.includes(displayValue)) {
@@ -590,7 +602,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
           <tbody>
             {getFilteredAndSortedSubmissions.length === 0 ? (
               <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '20px' }}>
+                <td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>
                   No submissions yet
                 </td>
               </tr>
@@ -633,6 +645,15 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                         )
                       }
                       
+                      // Special handling for sent by client
+                      if (column.key === 'sentByClient') {
+                        return (
+                          <td key={column.key}>
+                            {submission.sentByClient === 'TRUE' ? 'Yes' : 'No'}
+                          </td>
+                        )
+                      }
+
                       // Special handling for listingLink - show Open button
                       if (column.key === 'listingLink') {
                         return (
@@ -674,7 +695,7 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                   
                   {expandedRows.has(submission.submissionId) && (
                     <tr className="collapsible-row">
-                      <td colSpan="7">
+                      <td colSpan="8">
                         <div className="collapsible-content">
                           {editingRow === submission.submissionId ? (
                             <div className="edit-form">
@@ -700,6 +721,16 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                                       onChange={(e) => handleEditChange('cimReceived', e.target.checked ? 'TRUE' : 'FALSE')}
                                     />
                                   </div>
+                                </div>
+                                <div className="edit-item">
+                                  <label>Sent by Client:</label>
+                                  <select
+                                    value={editFormData.sentByClient === 'TRUE' ? 'Yes' : 'No'}
+                                    onChange={(e) => handleEditChange('sentByClient', e.target.value === 'Yes' ? 'TRUE' : 'FALSE')}
+                                  >
+                                    <option value="No">No</option>
+                                    <option value="Yes">Yes</option>
+                                  </select>
                                 </div>
                                 <div className="edit-item">
                                   <label>Status:</label>
@@ -768,6 +799,10 @@ const Panel = ({ submissions, onRefresh, pagination, onPageChange, filterOptions
                                   <span className="checkbox unknown">?</span>
                                 )}
                               </span>
+                            </div>
+                            <div className="detail-item">
+                              <span className="detail-label">Sent by Client:</span>
+                              <span className="detail-value">{submission.sentByClient === 'TRUE' ? 'Yes' : 'No'}</span>
                             </div>
                             <div className="detail-item">
                               <span className="detail-label">Status:</span>
